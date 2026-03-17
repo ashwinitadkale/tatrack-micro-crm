@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}Sessions{% endblock %}
+{% block extra_styles %}
+<style>
+.session-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px; }
+.session-card {
+    background:var(--ink-surface);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius-lg);
+    overflow:hidden;
+    transition:var(--transition);
+    cursor:pointer;
+}
+.session-card:hover { transform:translateY(-3px); box-shadow:0 8px 32px rgba(0,0,0,0.4); border-color:#333; }
+.session-card-top {
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--ink-border);
+    position:relative;
+}
+.session-card-top::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, var(--purple), transparent);
+}
+.session-card.completed .session-card-top::before { background:linear-gradient(90deg, var(--green), transparent); }
+.session-card.cancelled .session-card-top::before { background:linear-gradient(90deg, var(--neon-red), transparent); }
+.sess-client { font-weight:800; font-size:1rem; margin-bottom:2px; }
+.sess-idea { font-size:0.78rem; color:var(--text-muted); margin-bottom:10px; }
+.session-card-body { padding:14px 18px; display:flex; flex-direction:column; gap:8px; }
+.sess-meta-row { display:flex; align-items:center; justify-content:space-between; }
+.sess-meta-label { font-size:0.68rem; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
+.sess-meta-val { font-size:0.82rem; font-weight:600; }
+.sess-finance { background:var(--ink-raised); border-radius:var(--radius); padding:10px 14px; display:flex; justify-content:space-between; margin:4px 0 0; }
+.sess-finance-item { text-align:center; }
+.sess-finance-label { font-size:0.62rem; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
+.sess-finance-val { font-family:var(--font-mono); font-weight:700; font-size:0.88rem; }
+.progress-bar { height:4px; background:var(--ink-border); border-radius:2px; margin-top:8px; overflow:hidden; }
+.progress-fill { height:100%; background:linear-gradient(90deg, var(--purple), var(--green)); border-radius:2px; transition:width 0.6s ease; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-enter">
+<div class="page-header">
+    <div>
+        <div class="page-title">SESSIONS</div>
+        <div class="page-subtitle">Booking schedule</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewSessionModal()">+ Book Session</button>
+</div>
+<div class="page-body">
+
+    <!-- Tab bar -->
+    <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--ink-border);padding-bottom:0">
+        <button class="filter-btn active" id="tab-all" onclick="setTab('all',this)" style="border-bottom:2px solid var(--neon-red);border-radius:0;padding-bottom:10px">All</button>
+        <button class="filter-btn" id="tab-scheduled" onclick="setTab('scheduled',this)" style="border-bottom:2px solid transparent;border-radius:0;padding-bottom:10px">Scheduled</button>
+        <button class="filter-btn" id="tab-completed" onclick="setTab('completed',this)" style="border-bottom:2px solid transparent;border-radius:0;padding-bottom:10px">Completed</button>
+        <button class="filter-btn" id="tab-cancelled" onclick="setTab('cancelled',this)" style="border-bottom:2px solid transparent;border-radius:0;padding-bottom:10px">Cancelled</button>
+    </div>
+
+    <div class="session-grid" id="sessions-grid">
+        <div class="skeleton" style="height:200px;border-radius:12px"></div>
+        <div class="skeleton" style="height:200px;border-radius:12px"></div>
+        <div class="skeleton" style="height:200px;border-radius:12px"></div>
+    </div>
+</div>
+</div>
+
+<!-- Session Detail Modal -->
+<div class="modal-overlay" id="sessDetailModal">
+<div class="modal" style="max-width:540px">
+    <div class="modal-header">
+        <span class="modal-title" id="sd-client">—</span>
+        <button class="modal-close" onclick="closeModal('sessDetailModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="grid-2" style="margin-bottom:16px">
+            <div><div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Date</div><div id="sd-date" style="font-weight:600"></div></div>
+            <div><div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Time</div><div id="sd-time" style="font-weight:600"></div></div>
+        </div>
+        <div style="margin-bottom:16px">
+            <div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Tattoo</div>
+            <div id="sd-idea" style="color:var(--text-secondary)"></div>
+        </div>
+        <div style="background:var(--ink-raised);border-radius:var(--radius);padding:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;text-align:center">
+            <div><div style="font-size:0.62rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Deposit</div><div id="sd-deposit" style="font-family:var(--font-mono);font-weight:700;color:var(--amber)"></div></div>
+            <div><div style="font-size:0.62rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total</div><div id="sd-total" style="font-family:var(--font-mono);font-weight:700"></div></div>
+            <div><div style="font-size:0.62rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Balance</div><div id="sd-balance" style="font-family:var(--font-mono);font-weight:700;color:var(--neon-red)"></div></div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--text-secondary);margin-bottom:10px;font-family:var(--font-mono)">Update Status</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px" id="sd-status-btns"></div>
+        <div class="divider"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group" style="margin:0">
+                <label class="form-label">Deposit (₹)</label>
+                <input class="form-control" id="sd-dep-inp" type="number" placeholder="0">
+            </div>
+            <div class="form-group" style="margin:0">
+                <label class="form-label">Total (₹)</label>
+                <input class="form-control" id="sd-tot-inp" type="number" placeholder="0">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('sessDetailModal')">Close</button>
+        <button class="btn btn-primary" onclick="updateSessionFinance()">Save Changes</button>
+    </div>
+</div>
+</div>
+
+<!-- New Session Modal -->
+<div class="modal-overlay" id="newSessModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">BOOK SESSION</span>
+        <button class="modal-close" onclick="closeModal('newSessModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="form-group">
+            <label class="form-label">Client / Inquiry *</label>
+            <select class="form-control" id="ns-inquiry"><option value="">Select inquiry…</option></select>
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Session Date *</label>
+                <input class="form-control" id="ns-date" type="date">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Time</label>
+                <input class="form-control" id="ns-time" placeholder="2:00 PM">
+            </div>
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Deposit (₹)</label>
+                <input class="form-control" id="ns-deposit" type="number" placeholder="1000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Total Price (₹)</label>
+                <input class="form-control" id="ns-total" type="number" placeholder="5000">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('newSessModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="createSession()">Confirm Booking</button>
+    </div>
+</div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    // Filter button styles (reuse from reminders)
+    document.querySelectorAll('.filter-btn').forEach(b => {
+        b.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(x => x.style.borderBottomColor = 'transparent');
+        });
+    });
+</script>
+<script>
+let allSessions = [];
+let currentTab = 'all';
+let currentSessId = null;
+
+async function loadSessions() {
+    const r = await fetch('/api/sessions');
+    if (!r.ok) { window.location.href='/login'; return; }
+    allSessions = await r.json();
+    renderSessions();
+}
+
+function setTab(t, btn) {
+    currentTab = t;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.borderBottomColor = 'transparent';
+    });
+    btn.classList.add('active');
+    btn.style.borderBottomColor = 'var(--neon-red)';
+    renderSessions();
+}
+
+function renderSessions() {
+    let list = allSessions;
+    if (currentTab !== 'all') list = list.filter(s => s.status === currentTab);
+    const grid = document.getElementById('sessions-grid');
+    if (!list.length) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">◈</div><b>No sessions found</b><p>Book a session from an inquiry</p></div>`;
+        return;
+    }
+    grid.innerHTML = list.map(s => {
+        const pct = s.total_price > 0 ? Math.min(100, Math.round((s.deposit_amount / s.total_price) * 100)) : 0;
+        const today = new Date().toISOString().split('T')[0];
+        const isToday = s.session_date === today;
+        return `
+        <div class="session-card ${s.status}" onclick="openSessDetail(${s.id})">
+            <div class="session-card-top">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                    <div>
+                        <div class="sess-client">${s.client_name}</div>
+                        <div class="sess-idea">${s.tattoo_idea||'—'}</div>
+                    </div>
+                    <span class="badge ${getBadgeClass(s.status)}">${s.status}</span>
+                </div>
+                ${isToday ? `<div style="font-size:0.68rem;font-weight:700;color:var(--purple);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;margin-top:4px">● TODAY</div>` : ''}
+            </div>
+            <div class="session-card-body">
+                <div class="sess-meta-row">
+                    <span class="sess-meta-label">Date</span>
+                    <span class="sess-meta-val">${fmtDate(s.session_date)}</span>
+                </div>
+                <div class="sess-meta-row">
+                    <span class="sess-meta-label">Time</span>
+                    <span class="sess-meta-val">${s.session_time||'TBD'}</span>
+                </div>
+                <div class="sess-finance">
+                    <div class="sess-finance-item">
+                        <div class="sess-finance-label">Deposit</div>
+                        <div class="sess-finance-val" style="color:var(--amber)">${fmtPrice(s.deposit_amount)}</div>
+                    </div>
+                    <div class="sess-finance-item">
+                        <div class="sess-finance-label">Total</div>
+                        <div class="sess-finance-val">${fmtPrice(s.total_price)}</div>
+                    </div>
+                    <div class="sess-finance-item">
+                        <div class="sess-finance-label">Balance</div>
+                        <div class="sess-finance-val" style="color:var(--neon-red)">${fmtPrice(s.balance)}</div>
+                    </div>
+                </div>
+                ${s.total_price > 0 ? `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function openSessDetail(id) {
+    currentSessId = id;
+    const s = allSessions.find(x => x.id === id);
+    document.getElementById('sd-client').textContent = s.client_name;
+    document.getElementById('sd-date').textContent = fmtDate(s.session_date);
+    document.getElementById('sd-time').textContent = s.session_time || 'TBD';
+    document.getElementById('sd-idea').textContent = s.tattoo_idea || '—';
+    document.getElementById('sd-deposit').textContent = fmtPrice(s.deposit_amount);
+    document.getElementById('sd-total').textContent = fmtPrice(s.total_price);
+    document.getElementById('sd-balance').textContent = fmtPrice(s.balance);
+    document.getElementById('sd-dep-inp').value = s.deposit_amount || '';
+    document.getElementById('sd-tot-inp').value = s.total_price || '';
+
+    const statuses = ['scheduled','completed','cancelled','rescheduled'];
+    document.getElementById('sd-status-btns').innerHTML = statuses.map(st =>
+        `<button class="btn btn-sm ${st===s.status?'btn-primary':'btn-secondary'}" onclick="updateSessStatus('${st}')">${st.charAt(0).toUpperCase()+st.slice(1)}</button>`
+    ).join('');
+    openModal('sessDetailModal');
+}
+
+async function updateSessStatus(status) {
+    const r = await fetch('/api/sessions/'+currentSessId, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})
+    });
+    if (r.ok) {
+        showToast('Status → ' + status);
+        closeModal('sessDetailModal');
+        loadSessions();
+    }
+}
+
+async function updateSessionFinance() {
+    const deposit_amount = parseFloat(document.getElementById('sd-dep-inp').value) || 0;
+    const total_price = parseFloat(document.getElementById('sd-tot-inp').value) || 0;
+    const r = await fetch('/api/sessions/'+currentSessId, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deposit_amount, total_price})
+    });
+    if (r.ok) {
+        showToast('Session updated');
+        closeModal('sessDetailModal');
+        loadSessions();
+    }
+}
+
+async function openNewSessionModal() {
+    const r = await fetch('/api/inquiries');
+    if (!r.ok) return;
+    const inquiries = await r.json();
+    const sel = document.getElementById('ns-inquiry');
+    sel.innerHTML = '<option value="">Select inquiry…</option>';
+    inquiries.filter(i => i.status !== 'completed' && i.status !== 'lost').forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = `${i.client_name} (${i.status})`;
+        sel.appendChild(opt);
+    });
+    document.getElementById('ns-date').min = new Date().toISOString().split('T')[0];
+    openModal('newSessModal');
+}
+
+async function createSession() {
+    const inquiry_id = document.getElementById('ns-inquiry').value;
+    const date = document.getElementById('ns-date').value;
+    if (!inquiry_id || !date) { showToast('Inquiry and date required','error'); return; }
+    const r = await fetch('/api/sessions', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+            inquiry_id:parseInt(inquiry_id),
+            session_date:date,
+            session_time:document.getElementById('ns-time').value||'TBD',
+            deposit_amount:parseFloat(document.getElementById('ns-deposit').value)||0,
+            total_price:parseFloat(document.getElementById('ns-total').value)||0
+        })
+    });
+    if (r.ok) {
+        closeModal('newSessModal');
+        showToast('Session booked!');
+        loadSessions();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+loadSessions();
+</script>
+{% endblock %}

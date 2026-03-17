@@ -1,115 +1,358 @@
 {% extends "base.html" %}
+{% block title %}Inquiries{% endblock %}
+{% block extra_styles %}
+<style>
+.pipeline { display:flex; gap:14px; overflow-x:auto; padding-bottom:16px; align-items:flex-start; min-height:calc(100vh - 200px); }
+.pipeline::-webkit-scrollbar { height:6px; }
+.kanban-col {
+    flex-shrink:0; width:260px;
+    background:var(--ink-surface);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius-lg);
+    display:flex; flex-direction:column;
+    max-height:calc(100vh - 220px);
+}
+.kanban-col-header {
+    padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--ink-border);
+    position:sticky; top:0; background:var(--ink-surface);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    z-index:1;
+}
+.col-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:2px; font-family:var(--font-mono); }
+.col-count { background:var(--ink-raised); color:var(--text-muted); border-radius:99px; font-size:0.68rem; padding:2px 8px; font-family:var(--font-mono); }
+.kanban-cards { padding:10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px; }
+.kanban-card {
+    background:var(--ink-raised);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius);
+    padding:14px;
+    cursor:pointer;
+    transition:var(--transition);
+}
+.kanban-card:hover { border-color:#444; transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.4); }
+.kcard-name { font-weight:700; font-size:0.9rem; margin-bottom:4px; }
+.kcard-idea { font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.kcard-foot { display:flex; align-items:center; justify-content:space-between; }
+.kcard-price { font-family:var(--font-mono); font-size:0.78rem; color:var(--amber); font-weight:600; }
+.kcard-contact { font-size:0.7rem; color:var(--text-muted); }
+.col-new .kanban-col-header { border-top:2px solid #818CF8; }
+.col-contacted .kanban-col-header { border-top:2px solid #38BDF8; }
+.col-consulted .kanban-col-header { border-top:2px solid var(--amber); }
+.col-booked .kanban-col-header { border-top:2px solid var(--purple); }
+.col-completed .kanban-col-header { border-top:2px solid var(--green); }
+.col-lost .kanban-col-header { border-top:2px solid #444; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-bold">Inquiry Inbox</h2>
-    <button onclick="document.getElementById('inquiryModal').classList.remove('hidden')" 
-            class="bg-black text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition">
-        + New Inquiry
-    </button>
+<div class="page-enter">
+<div class="page-header">
+    <div>
+        <div class="page-title">INQUIRIES</div>
+        <div class="page-subtitle">Client inquiry pipeline</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addModal')">+ Add Inquiry</button>
 </div>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    <div class="bg-gray-200 p-4 rounded-xl min-h-[500px]">
-        <h3 class="font-bold text-gray-600 mb-4 uppercase text-sm tracking-widest">New</h3>
-        <div id="new-list" class="space-y-3"></div>
-    </div>
-    
-    <div class="bg-gray-200 p-4 rounded-xl">
-        <h3 class="font-bold text-gray-600 mb-4 uppercase text-sm tracking-widest">Contacted</h3>
-        <div id="contacted-list" class="space-y-3"></div>
-    </div>
-
-    <div class="bg-gray-200 p-4 rounded-xl">
-        <h3 class="font-bold text-gray-600 mb-4 uppercase text-sm tracking-widest">Booked</h3>
-        <div id="booked-list" class="space-y-3"></div>
+<div class="page-body" style="padding-top:20px">
+    <div class="pipeline" id="pipeline">
+        <!-- Rendered by JS -->
+        <div style="padding:40px;color:var(--text-muted)">Loading pipeline…</div>
     </div>
 </div>
+</div>
 
-<div id="inquiryModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex justify-center items-center">
-    <div class="bg-white p-6 rounded-lg shadow-xl w-96">
-        <h3 class="text-xl font-bold mb-4">Add Client</h3>
-        <form id="newInquiryForm" class="space-y-3">
-            <input type="text" id="clientName" placeholder="Client Name" class="w-full border p-2 rounded" required>
-            <input type="text" id="contactInfo" placeholder="Instagram / Phone" class="w-full border p-2 rounded" required>
-            <input type="number" id="estPrice" placeholder="Estimated Price ($)" class="w-full border p-2 rounded">
-            <div class="flex justify-end gap-2 mt-4">
-                <button type="button" onclick="document.getElementById('inquiryModal').classList.add('hidden')" class="text-gray-500">Cancel</button>
-                <button type="submit" class="bg-black text-white px-4 py-2 rounded">Save</button>
+<!-- Detail / Edit Modal -->
+<div class="modal-overlay" id="detailModal">
+<div class="modal" style="max-width:600px">
+    <div class="modal-header">
+        <span class="modal-title" id="detail-client-name">—</span>
+        <button class="modal-close" onclick="closeModal('detailModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+            <div><div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Contact</div><div id="d-contact" style="font-size:0.9rem"></div></div>
+            <div><div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Estimated Price</div><div id="d-price" style="font-family:var(--font-mono);font-size:0.9rem;color:var(--amber)"></div></div>
+        </div>
+        <div style="margin-bottom:16px">
+            <div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Tattoo Idea</div>
+            <div id="d-idea" style="font-size:0.9rem;color:var(--text-secondary)"></div>
+        </div>
+        <div style="margin-bottom:16px">
+            <div style="font-size:0.68rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Notes</div>
+            <div id="d-notes" style="font-size:0.85rem;color:var(--text-secondary);white-space:pre-wrap"></div>
+        </div>
+        <div class="divider"></div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:var(--text-secondary);margin-bottom:12px;font-family:var(--font-mono)">Update Status</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px" id="status-btns"></div>
+        <div class="divider"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" onclick="openBookModal()">📅 Book Session</button>
+            <button class="btn btn-secondary btn-sm" onclick="openReminderModal()">◉ Add Reminder</button>
+            <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="deleteInquiry()">Delete</button>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Add Inquiry Modal -->
+<div class="modal-overlay" id="addModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">NEW INQUIRY</span>
+        <button class="modal-close" onclick="closeModal('addModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Client Name *</label>
+                <input class="form-control" id="a-name" placeholder="Alex Chen">
             </div>
-        </form>
+            <div class="form-group">
+                <label class="form-label">Contact (IG / Phone) *</label>
+                <input class="form-control" id="a-contact" placeholder="@alexchen or +91...">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Tattoo Idea</label>
+            <input class="form-control" id="a-idea" placeholder="Japanese sleeve, geometric, etc.">
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Estimated Price (₹)</label>
+                <input class="form-control" id="a-price" type="number" placeholder="5000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-control" id="a-status">
+                    <option value="new">New</option>
+                    <option value="contacted">Contacted</option>
+                    <option value="consulted">Consulted</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control" id="a-notes" placeholder="Reference images, placement, style details…"></textarea>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="addInquiry()">Create Inquiry</button>
     </div>
 </div>
+</div>
 
+<!-- Book Session Modal -->
+<div class="modal-overlay" id="bookModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">BOOK SESSION</span>
+        <button class="modal-close" onclick="closeModal('bookModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Date *</label>
+                <input class="form-control" id="b-date" type="date">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Time</label>
+                <input class="form-control" id="b-time" placeholder="2:00 PM">
+            </div>
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Deposit (₹)</label>
+                <input class="form-control" id="b-deposit" type="number" placeholder="1000">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Total Price (₹)</label>
+                <input class="form-control" id="b-total" type="number" placeholder="5000">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('bookModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="bookSession()">Confirm Booking</button>
+    </div>
+</div>
+</div>
+
+<!-- Add Reminder Modal -->
+<div class="modal-overlay" id="remModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">ADD REMINDER</span>
+        <button class="modal-close" onclick="closeModal('remModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="form-group">
+            <label class="form-label">Reminder Date *</label>
+            <input class="form-control" id="r-date" type="date">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Note</label>
+            <input class="form-control" id="r-note" placeholder="Send reference images, confirm deposit…">
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('remModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="addReminder()">Set Reminder</button>
+    </div>
+</div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}
 <script>
+const COLS = [
+    {status:'new', label:'New', cls:'col-new'},
+    {status:'contacted', label:'Contacted', cls:'col-contacted'},
+    {status:'consulted', label:'Consulted', cls:'col-consulted'},
+    {status:'booked', label:'Booked', cls:'col-booked'},
+    {status:'completed', label:'Completed', cls:'col-completed'},
+    {status:'lost', label:'Lost', cls:'col-lost'},
+];
+let allInquiries = [];
+let currentId = null;
+
 async function loadInquiries() {
-    const response = await fetch('/inquiries');
-    if (!response.ok) return; 
-    const inquiries = await response.json();
-    
-    ['new', 'contacted', 'booked'].forEach(id => document.getElementById(id + '-list').innerHTML = '');
-
-    inquiries.forEach(inq => {
-        let status = inq.status || 'new';
-        const container = document.getElementById(status + '-list') || document.getElementById('new-list');
-
-        const card = `
-            <div class="bg-white p-4 rounded shadow-sm border-l-4 border-black mb-3">
-                <div class="flex justify-between">
-                    <p class="font-bold text-lg">${inq.client_name}</p>
-                    <span class="text-xs font-mono bg-gray-100 px-1 rounded h-fit">$${inq.estimated_price || 0}</span>
-                </div>
-                <div class="mt-3 flex gap-2">
-                    ${status === 'new' ? `<button onclick="updateStatus(${inq.id}, 'contacted')" class="text-xs bg-blue-100 px-2 py-1 rounded">Mark Contacted</button>` : ''}
-                    ${status !== 'booked' ? `<button onclick="bookSession(${inq.id})" class="text-xs bg-green-100 px-2 py-1 rounded font-bold">+ Book Session</button>` : ''}
-                </div>
-            </div>`;
-        container.innerHTML += card;
-    });
+    const r = await fetch('/api/inquiries');
+    if (!r.ok) { window.location.href='/login'; return; }
+    allInquiries = await r.json();
+    renderPipeline();
 }
 
-document.getElementById('newInquiryForm').onsubmit = async (e) => {
-    e.preventDefault();
-    await fetch('/inquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+function renderPipeline() {
+    const pipe = document.getElementById('pipeline');
+    pipe.innerHTML = COLS.map(col => {
+        const cards = allInquiries.filter(i => i.status === col.status);
+        return `<div class="kanban-col ${col.cls}">
+            <div class="kanban-col-header">
+                <span class="col-title">${col.label}</span>
+                <span class="col-count">${cards.length}</span>
+            </div>
+            <div class="kanban-cards">
+                ${cards.length === 0 ? `<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.78rem">Empty</div>` : ''}
+                ${cards.map(c => `
+                <div class="kanban-card" onclick="openDetail(${c.id})">
+                    <div class="kcard-name">${c.client_name}</div>
+                    <div class="kcard-idea">${c.tattoo_idea||'No idea specified'}</div>
+                    <div class="kcard-foot">
+                        <span class="kcard-price">${fmtPrice(c.estimated_price)}</span>
+                        <span class="kcard-contact">${c.contact_info}</span>
+                    </div>
+                </div>`).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function openDetail(id) {
+    currentId = id;
+    const r = await fetch('/api/inquiries/'+id);
+    const d = await r.json();
+    document.getElementById('detail-client-name').textContent = d.client_name;
+    document.getElementById('d-contact').textContent = d.contact_info;
+    document.getElementById('d-price').textContent = fmtPrice(d.estimated_price);
+    document.getElementById('d-idea').textContent = d.tattoo_idea || '—';
+    document.getElementById('d-notes').textContent = d.notes || '—';
+    document.getElementById('b-total').value = d.estimated_price || '';
+
+    const statuses = ['new','contacted','consulted','booked','completed','lost'];
+    document.getElementById('status-btns').innerHTML = statuses.map(s =>
+        `<button class="btn btn-sm ${s===d.status?'btn-primary':'btn-secondary'}" onclick="changeStatus('${s}')">${s.charAt(0).toUpperCase()+s.slice(1)}</button>`
+    ).join('');
+    openModal('detailModal');
+}
+
+async function changeStatus(status) {
+    await fetch('/api/inquiries/'+currentId, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status})});
+    closeModal('detailModal');
+    showToast('Status updated to ' + status);
+    loadInquiries();
+}
+
+async function addInquiry() {
+    const name = document.getElementById('a-name').value.trim();
+    const contact = document.getElementById('a-contact').value.trim();
+    if (!name || !contact) { showToast('Name and contact required', 'error'); return; }
+    const r = await fetch('/api/inquiries', {
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-            client_name: document.getElementById('clientName').value,
-            contact_info: document.getElementById('contactInfo').value,
-            estimated_price: document.getElementById('estPrice').value
+            client_name:name, contact_info:contact,
+            tattoo_idea:document.getElementById('a-idea').value,
+            estimated_price:parseFloat(document.getElementById('a-price').value)||0,
+            notes:document.getElementById('a-notes').value,
+            status:document.getElementById('a-status').value
         })
     });
-    document.getElementById('inquiryModal').classList.add('hidden');
-    loadInquiries();
-};
-
-async function updateStatus(id, status) {
-    await fetch(`/inquiries/${id}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({status: status})
-    });
-    loadInquiries();
+    if (r.ok) {
+        closeModal('addModal');
+        document.getElementById('a-name').value=''; document.getElementById('a-contact').value='';
+        document.getElementById('a-idea').value=''; document.getElementById('a-price').value='';
+        document.getElementById('a-notes').value='';
+        showToast('Inquiry created + reminder set for 2 days');
+        loadInquiries();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error', 'error');
+    }
 }
 
-async function bookSession(id) {
-    const date = prompt("Date (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
-    if(!date) return;
-    const time = prompt("Time:", "12:00");
-    const deposit = prompt("Deposit Amount ($):", "50");
+function openBookModal() { closeModal('detailModal'); openModal('bookModal'); }
+function openReminderModal() { closeModal('detailModal'); openModal('remModal'); }
 
-    await fetch('/sessions', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+async function bookSession() {
+    const date = document.getElementById('b-date').value;
+    if (!date) { showToast('Date required', 'error'); return; }
+    const r = await fetch('/api/sessions', {
+        method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-            inquiry_id: id,
-            session_date: date,
-            session_time: time,
-            deposit_amount: deposit
+            inquiry_id:currentId,
+            session_date:date,
+            session_time:document.getElementById('b-time').value||'TBD',
+            deposit_amount:parseFloat(document.getElementById('b-deposit').value)||0,
+            total_price:parseFloat(document.getElementById('b-total').value)||0
         })
     });
+    if (r.ok) {
+        closeModal('bookModal');
+        showToast('Session booked! Status updated to Booked');
+        loadInquiries();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+async function addReminder() {
+    const date = document.getElementById('r-date').value;
+    if (!date) { showToast('Date required','error'); return; }
+    const r = await fetch('/api/reminders', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({inquiry_id:currentId, reminder_date:date, note:document.getElementById('r-note').value})
+    });
+    if (r.ok) {
+        closeModal('remModal');
+        showToast('Reminder set!');
+        loadReminderBadge();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+async function deleteInquiry() {
+    if (!confirm('Delete this inquiry? This cannot be undone.')) return;
+    await fetch('/api/inquiries/'+currentId, {method:'DELETE'});
+    closeModal('detailModal');
+    showToast('Inquiry deleted','warning');
     loadInquiries();
 }
 
-document.addEventListener('DOMContentLoaded', loadInquiries);
+// Set today's date as min for booking
+document.getElementById('b-date').min = new Date().toISOString().split('T')[0];
+document.getElementById('r-date').min = new Date().toISOString().split('T')[0];
+
+loadInquiries();
 </script>
 {% endblock %}

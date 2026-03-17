@@ -1,79 +1,69 @@
 from flask import Blueprint, request, jsonify, render_template
+from flask_login import login_required, current_user
 from app import db
 from app.models.session import Session
 from app.models.inquiry import Inquiry
-from datetime import datetime 
+from datetime import datetime, date
 
 sessions_bp = Blueprint("sessions", __name__)
 
-@sessions_bp.route("/sessions", methods=["POST"])
+@sessions_bp.route("/sessions")
+@login_required
+def sessions_page():
+    return render_template("sessions.html")
+
+@sessions_bp.route("/api/sessions", methods=["POST"])
+@login_required
 def create_session():
-    data = request.json
-    inquiry = Inquiry.query.get_or_404(data["inquiry_id"])
-    
-    # Security check: Ensure inquiry belongs to logged-in user
-    if inquiry.user_id != current_user.id:
-        return jsonify({"error": "Unauthorized"}), 403
-
+    data = request.json or {}
+    if "inquiry_id" not in data or "session_date" not in data:
+        return jsonify({"error": "inquiry_id and session_date required"}), 400
+    inquiry = Inquiry.query.filter_by(id=data["inquiry_id"], user_id=current_user.id).first_or_404()
     inquiry.status = "booked"
-
     session = Session(
         inquiry_id=inquiry.id,
-        session_date=datetime.strptime(data["session_date"], "%Y-%m-%d"),
-        session_time=data.get("session_time"),
-        deposit_amount=data.get("deposit_amount", 0), # Capture deposit
-        total_price=data.get("total_price", 0)
+        session_date=datetime.strptime(data["session_date"], "%Y-%m-%d").date(),
+        session_time=data.get("session_time", "TBD"),
+        deposit_amount=data.get("deposit_amount", 0),
+        total_price=data.get("total_price", inquiry.estimated_price or 0),
     )
-
     db.session.add(session)
     db.session.commit()
+    return jsonify({"message": "Session booked", "session": session.to_dict()}), 201
 
-    return jsonify({"message": "Session booked"}), 201
-
-@sessions_bp.route("/sessions", methods=["GET"])
+@sessions_bp.route("/api/sessions", methods=["GET"])
+@login_required
 def get_sessions():
-    sessions = Session.query.all()
-    return jsonify([
-        {
-            "id": s.id,
-            "client": s.inquiry.client_name,
-            "date": str(s.session_date),
-            "time": s.session_time,
-            "status": s.status
-        } for s in sessions
-    ])
+    sessions = Session.query.join(Inquiry).filter(
+        Inquiry.user_id == current_user.id
+    ).order_by(Session.session_date).all()
+    return jsonify([s.to_dict() for s in sessions])
 
+@sessions_bp.route("/api/sessions/today", methods=["GET"])
+@login_required
+def today_sessions():
+    today = date.today()
+    sessions = Session.query.join(Inquiry).filter(
+        Inquiry.user_id == current_user.id,
+        Session.session_date == today
+    ).all()
+    return jsonify([s.to_dict() for s in sessions])
 
-@sessions_bp.route("/sessions/<int:id>", methods=["PUT"])
+@sessions_bp.route("/api/sessions/<int:id>", methods=["PUT"])
+@login_required
 def update_session(id):
-    session = Session.query.get_or_404(id)
-    data = request.json
-
-    session.status = data.get("status", session.status)
-    session.session_date = data.get("session_date", session.session_date)
-    session.session_time = data.get("session_time", session.session_time)
-
+    session = Session.query.join(Inquiry).filter(
+        Session.id == id, Inquiry.user_id == current_user.id
+    ).first_or_404()
+    data = request.json or {}
+    for field in ("status", "session_time", "deposit_amount", "total_price"):
+        if field in data:
+            setattr(session, field, data[field])
+    if "session_date" in data:
+        session.session_date = datetime.strptime(data["session_date"], "%Y-%m-%d").date()
     if session.status == "completed":
         session.inquiry.status = "completed"
-
-    if session.status == "cancelled":
+    elif session.status == "cancelled":
         session.inquiry.status = "lost"
-
     db.session.commit()
-    return jsonify({"message": "Session updated"})
-
-# @sessions_bp.route("/sessions/today", methods=["GET"])
-# def today_sessions():
-#     today = datetime.today()
-#     sessions = Session.query.filter_by(
-#         session_date=today,
-#         status="scheduled"
-#     ).all()
-
-#     return jsonify([
-#         {
-#             "id": s.id,
-#             "client": s.inquiry.client_name,
-#             "time": s.session_time
-#         } for s in sessions
-#     ])
+    return jsonify({"message": "Session updated", "session": session.to_dict()})

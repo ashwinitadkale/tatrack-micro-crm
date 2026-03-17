@@ -1,94 +1,68 @@
-# from flask import Blueprint, request, jsonify
-# from app import db
-# from app.models.reminder import Reminder
-# from datetime import datetime
-
-# reminders_bp = Blueprint("reminders", __name__)
-
-# @reminders_bp.route("/reminders", methods=["POST"])
-# def create_reminder():
-#     data = request.json
-
-#     reminder_date = datetime.strptime(
-#         data["reminder_date"], "%Y-%m-%d"
-#     ).date()
-
-#     reminder = Reminder(
-#         inquiry_id=data["inquiry_id"],
-#         reminder_date=reminder_date,
-#         reason=data.get("reason")
-#     )
-#     db.session.add(reminder)
-#     db.session.commit()
-#     return jsonify({"message": "Reminder created"}), 201
-
-
-# @reminders_bp.route("/reminders/today", methods=["GET"])
-# def reminders_today():
-#     today = datetime.today()
-#     reminders = Reminder.query.filter_by(
-#         reminder_date=today,
-#         is_completed=False
-#     ).all()
-
-#     return jsonify([
-#         {
-#             "id": r.id,
-#             "inquiry_id": r.inquiry_id,
-#             "reason": r.reason
-#         } for r in reminders
-#     ])
-
-
-# @reminders_bp.route("/reminders/<int:id>/complete", methods=["PUT"])
-# def complete_reminder(id):
-#     reminder = Reminder.query.get_or_404(id)
-#     reminder.is_completed = True
-#     db.session.commit()
-#     return jsonify({"message": "Reminder completed"})
-# # quick route test 
-# @reminders_bp.route("/test", methods=["GET"])
-# def test_route():
-#     return {"message": "reminders blueprint working"}
-
-from flask import Blueprint, request, jsonify
-from flask import request, jsonify
-from datetime import datetime
+from flask import Blueprint, request, jsonify, render_template
+from flask_login import login_required, current_user
 from app import db
 from app.models.reminder import Reminder
-# from app.routes import reminders_bp
+from app.models.inquiry import Inquiry
+from datetime import datetime, date
 
 reminders_bp = Blueprint("reminders", __name__)
 
-@reminders_bp.route("/reminders", methods=["POST"])
+@reminders_bp.route("/reminders")
+@login_required
+def reminders_page():
+    return render_template("reminders.html")
+
+@reminders_bp.route("/api/reminders", methods=["POST"])
+@login_required
 def create_reminder():
-    data = request.get_json()
-
-    if not data:
-        return jsonify({"error": "Request body must be JSON"}), 400
-
-    if "reminder_date" not in data:
-        return jsonify({
-            "error": "Missing required field: reminder_date (YYYY-MM-DD)"
-        }), 400
-
-    if "inquiry_id" not in data:
-        return jsonify({
-            "error": "Missing required field: inquiry_id"
-        }), 400
-
+    data = request.json or {}
+    if "inquiry_id" not in data or "reminder_date" not in data:
+        return jsonify({"error": "inquiry_id and reminder_date required"}), 400
+    inquiry = Inquiry.query.filter_by(id=data["inquiry_id"], user_id=current_user.id).first_or_404()
     reminder = Reminder(
-        inquiry_id=data["inquiry_id"],
-        reminder_date=datetime.strptime(
-            data["reminder_date"], "%Y-%m-%d"
-        ),
-        note=data.get("note", "")
+        inquiry_id=inquiry.id,
+        reminder_date=datetime.strptime(data["reminder_date"], "%Y-%m-%d").date(),
+        note=data.get("note", ""),
     )
-
     db.session.add(reminder)
     db.session.commit()
+    return jsonify({"message": "Reminder created", "reminder": reminder.to_dict()}), 201
 
-    return jsonify({
-        "message": "Reminder created successfully",
-        "reminder_id": reminder.id
-    }), 201
+@reminders_bp.route("/api/reminders", methods=["GET"])
+@login_required
+def get_reminders():
+    reminders = Reminder.query.join(Inquiry).filter(
+        Inquiry.user_id == current_user.id
+    ).order_by(Reminder.is_completed, Reminder.reminder_date).all()
+    return jsonify([r.to_dict() for r in reminders])
+
+@reminders_bp.route("/api/reminders/today", methods=["GET"])
+@login_required
+def today_reminders():
+    today = date.today()
+    reminders = Reminder.query.join(Inquiry).filter(
+        Inquiry.user_id == current_user.id,
+        Reminder.reminder_date == today,
+        Reminder.is_completed == False
+    ).all()
+    return jsonify([r.to_dict() for r in reminders])
+
+@reminders_bp.route("/api/reminders/<int:id>/complete", methods=["PUT"])
+@login_required
+def complete_reminder(id):
+    reminder = Reminder.query.join(Inquiry).filter(
+        Reminder.id == id, Inquiry.user_id == current_user.id
+    ).first_or_404()
+    reminder.is_completed = True
+    db.session.commit()
+    return jsonify({"message": "Done", "reminder": reminder.to_dict()})
+
+@reminders_bp.route("/api/reminders/<int:id>", methods=["DELETE"])
+@login_required
+def delete_reminder(id):
+    reminder = Reminder.query.join(Inquiry).filter(
+        Reminder.id == id, Inquiry.user_id == current_user.id
+    ).first_or_404()
+    db.session.delete(reminder)
+    db.session.commit()
+    return jsonify({"message": "Deleted"})

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-enter">
+<div class="page-header">
+    <div>
+        <div class="page-title">DASHBOARD</div>
+        <div class="page-subtitle" id="dash-date">Loading…</div>
+    </div>
+    <a href="/inquiries" class="btn btn-primary">+ New Inquiry</a>
+</div>
+<div class="page-body">
+
+    <!-- Stat cards -->
+    <div class="grid-4" style="margin-bottom:28px;" id="stats-grid">
+        <div class="stat-card red skeleton" style="height:120px"></div>
+        <div class="stat-card purple skeleton" style="height:120px"></div>
+        <div class="stat-card amber skeleton" style="height:120px"></div>
+        <div class="stat-card green skeleton" style="height:120px"></div>
+    </div>
+
+    <!-- Main grid -->
+    <div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start">
+
+        <!-- Recent inquiries -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">Recent Inquiries</span>
+                <a href="/inquiries" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">View all →</a>
+            </div>
+            <div id="recent-inquiries-list">
+                <div style="padding:20px">
+                    <div class="skeleton" style="height:48px;margin-bottom:8px"></div>
+                    <div class="skeleton" style="height:48px;margin-bottom:8px"></div>
+                    <div class="skeleton" style="height:48px"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right column -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+
+            <!-- Today's sessions -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Today's Sessions</span>
+                </div>
+                <div id="today-sessions" class="card-body" style="padding:16px">
+                    <div class="skeleton" style="height:32px"></div>
+                </div>
+            </div>
+
+            <!-- Today's reminders -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Due Today</span>
+                    <a href="/reminders" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">All →</a>
+                </div>
+                <div id="today-reminders" class="card-body" style="padding:16px">
+                    <div class="skeleton" style="height:32px"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    // Set date
+    document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-IN', {weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+    async function loadDashboard() {
+        const r = await fetch('/api/dashboard/stats');
+        if (!r.ok) { window.location.href='/login'; return; }
+        const d = await r.json();
+
+        // Stats
+        document.getElementById('stats-grid').innerHTML = `
+            <div class="stat-card red">
+                <div class="stat-icon">✦</div>
+                <div class="stat-value" style="color:var(--neon-red)">${d.pending_inquiries}</div>
+                <div class="stat-label">Pending Inquiries</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-icon">◈</div>
+                <div class="stat-value" style="color:#A78BFA">${d.today_sessions}</div>
+                <div class="stat-label">Today's Sessions</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-icon">◉</div>
+                <div class="stat-value" style="color:var(--amber)">${d.today_reminders + d.overdue_reminders}</div>
+                <div class="stat-label">Reminders Due</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-icon">⬡</div>
+                <div class="stat-value" style="color:var(--green)">${d.total_inquiries}</div>
+                <div class="stat-label">Total Clients</div>
+            </div>
+        `;
+
+        // Recent inquiries
+        const recentEl = document.getElementById('recent-inquiries-list');
+        if (!d.recent_inquiries.length) {
+            recentEl.innerHTML = `<div class="empty-state"><div class="empty-icon">✦</div><b>No inquiries yet</b><p>Start by adding your first client inquiry</p></div>`;
+        } else {
+            recentEl.innerHTML = `<table><thead><tr><th>Client</th><th>Tattoo Idea</th><th>Price</th><th>Status</th></tr></thead><tbody>
+                ${d.recent_inquiries.map(i => `
+                <tr onclick="window.location='/inquiries'" style="cursor:pointer">
+                    <td class="td-name">${i.client_name}</td>
+                    <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.tattoo_idea||'—'}</td>
+                    <td class="td-mono">${fmtPrice(i.estimated_price)}</td>
+                    <td><span class="badge ${getBadgeClass(i.status)}">${i.status}</span></td>
+                </tr>`).join('')}
+            </tbody></table>`;
+        }
+
+        // Today sessions
+        const sessEl = document.getElementById('today-sessions');
+        if (!d.today_session_list.length) {
+            sessEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:8px 0">No sessions today</div>`;
+        } else {
+            sessEl.innerHTML = d.today_session_list.map(s => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ink-border)">
+                    <div>
+                        <div style="font-weight:600;font-size:0.85rem">${s.client_name}</div>
+                        <div style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono)">${s.session_time}</div>
+                    </div>
+                    <span class="badge ${getBadgeClass(s.status)}">${s.status}</span>
+                </div>`).join('');
+        }
+
+        // Today reminders
+        const remEl = document.getElementById('today-reminders');
+        if (!d.today_reminder_list.length) {
+            remEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:8px 0">All clear for today ✓</div>`;
+        } else {
+            remEl.innerHTML = d.today_reminder_list.map(r => `
+                <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--ink-border)">
+                    <div style="flex:1">
+                        <div style="font-weight:600;font-size:0.85rem">${r.client_name}</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted)">${r.note||'Follow up'}</div>
+                    </div>
+                    <button class="btn btn-sm btn-secondary" onclick="doneReminder(${r.id}, this)" style="font-size:0.7rem;padding:4px 8px">Done</button>
+                </div>`).join('');
+        }
+    }
+
+    async function doneReminder(id, btn) {
+        btn.disabled = true;
+        await fetch('/api/reminders/'+id+'/complete', {method:'PUT'});
+        btn.closest('div[style*="display:flex"]').style.opacity = '0.3';
+        showToast('Reminder completed!');
+        loadReminderBadge();
+    }
+
+    loadDashboard();
+</script>
+{% endblock %}

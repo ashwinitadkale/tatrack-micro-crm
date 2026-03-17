@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Payments{% endblock %}
+{% block extra_styles %}
+<style>
+.pay-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px; }
+.pay-summary-card {
+    background:var(--ink-surface);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius-lg);
+    padding:20px;
+    text-align:center;
+    position:relative; overflow:hidden;
+}
+.pay-summary-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; }
+.pay-summary-card.c1::after { background:var(--amber); }
+.pay-summary-card.c2::after { background:var(--purple); }
+.pay-summary-card.c3::after { background:var(--green); }
+.pay-sum-val { font-family:var(--font-display); font-size:2rem; letter-spacing:1px; margin-bottom:4px; }
+.pay-sum-label { font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:2px; font-family:var(--font-mono); }
+.payment-row {
+    background:var(--ink-surface);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius);
+    padding:16px 20px;
+    margin-bottom:8px;
+    display:grid;
+    grid-template-columns:2fr 1fr 1fr 1fr 120px;
+    gap:12px;
+    align-items:center;
+    transition:var(--transition);
+}
+.payment-row:hover { border-color:#333; background:#1c1c1c; }
+.pay-cell-label { font-size:0.65rem; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; margin-bottom:3px; }
+.pay-cell-val { font-size:0.88rem; font-weight:600; }
+.pay-actions { display:flex; gap:6px; justify-content:flex-end; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-enter">
+<div class="page-header">
+    <div>
+        <div class="page-title">PAYMENTS</div>
+        <div class="page-subtitle">Deposits & balances</div>
+    </div>
+    <button class="btn btn-primary" onclick="openNewPayModal()">+ Record Payment</button>
+</div>
+<div class="page-body">
+
+    <!-- Summary cards -->
+    <div class="pay-summary" id="pay-summary">
+        <div class="pay-summary-card c1 skeleton" style="height:88px"></div>
+        <div class="pay-summary-card c2 skeleton" style="height:88px"></div>
+        <div class="pay-summary-card c3 skeleton" style="height:88px"></div>
+    </div>
+
+    <!-- Filters -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('deposit_pending',this)">Deposit Pending</button>
+        <button class="filter-btn" onclick="setFilter('deposit_received',this)">Deposit Received</button>
+        <button class="filter-btn" onclick="setFilter('fully_paid',this)">Fully Paid</button>
+    </div>
+
+    <!-- Header row -->
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 120px;gap:12px;padding:8px 20px;margin-bottom:4px">
+        <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px">Client</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px">Deposit</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px">Total</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px">Balance</div>
+        <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1.5px">Status</div>
+    </div>
+
+    <div id="payments-list">
+        <div class="skeleton" style="height:64px;margin-bottom:8px;border-radius:8px"></div>
+        <div class="skeleton" style="height:64px;margin-bottom:8px;border-radius:8px"></div>
+        <div class="skeleton" style="height:64px;border-radius:8px"></div>
+    </div>
+</div>
+</div>
+
+<!-- Edit Payment Modal -->
+<div class="modal-overlay" id="editPayModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">UPDATE PAYMENT</span>
+        <button class="modal-close" onclick="closeModal('editPayModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div style="margin-bottom:16px;padding:12px 16px;background:var(--ink-raised);border-radius:var(--radius)">
+            <div id="ep-client-name" style="font-weight:700;font-size:1rem"></div>
+            <div id="ep-tattoo" style="font-size:0.8rem;color:var(--text-muted);margin-top:2px"></div>
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Deposit Received (₹)</label>
+                <input class="form-control" id="ep-deposit" type="number" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Total Amount (₹)</label>
+                <input class="form-control" id="ep-total" type="number" placeholder="0">
+            </div>
+        </div>
+        <div style="background:var(--ink-raised);border-radius:var(--radius);padding:12px;text-align:center">
+            <div style="font-size:0.65rem;color:var(--text-muted);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Balance Due</div>
+            <div id="ep-balance-preview" style="font-family:var(--font-display);font-size:1.8rem;color:var(--amber)">—</div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('editPayModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="savePayment()">Save Payment</button>
+    </div>
+</div>
+</div>
+
+<!-- New Payment Modal -->
+<div class="modal-overlay" id="newPayModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">RECORD PAYMENT</span>
+        <button class="modal-close" onclick="closeModal('newPayModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="form-group">
+            <label class="form-label">Session *</label>
+            <select class="form-control" id="np-session"><option value="">Select session…</option></select>
+        </div>
+        <div class="grid-2">
+            <div class="form-group">
+                <label class="form-label">Deposit (₹)</label>
+                <input class="form-control" id="np-deposit" type="number" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Total Amount (₹)</label>
+                <input class="form-control" id="np-total" type="number" placeholder="0">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('newPayModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="createPayment()">Record</button>
+    </div>
+</div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<style>
+.filter-btn { padding:6px 16px; border-radius:99px; font-size:0.75rem; font-weight:600; cursor:pointer; border:1px solid var(--ink-border); background:var(--ink-raised); color:var(--text-muted); transition:var(--transition); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
+.filter-btn:hover { color:var(--text-primary); border-color:#444; }
+.filter-btn.active { background:var(--neon-red-dim); color:var(--neon-red); border-color:rgba(255,59,59,0.4); }
+</style>
+<script>
+let allPayments = [];
+let currentFilter = 'all';
+let currentPayId = null;
+
+async function loadPayments() {
+    const r = await fetch('/api/payments');
+    if (!r.ok) { window.location.href='/login'; return; }
+    allPayments = await r.json();
+    renderSummary();
+    renderPayments();
+}
+
+function renderSummary() {
+    const pending = allPayments.filter(p => p.payment_status === 'deposit_pending');
+    const partial = allPayments.filter(p => p.payment_status === 'deposit_received');
+    const paid = allPayments.filter(p => p.payment_status === 'fully_paid');
+    const totalBalance = allPayments.reduce((s, p) => s + (p.balance || 0), 0);
+    const totalDeposits = allPayments.reduce((s, p) => s + (p.deposit_amount || 0), 0);
+    const totalRevenue = allPayments.filter(p => p.payment_status === 'fully_paid').reduce((s, p) => s + (p.total_amount || 0), 0);
+
+    document.getElementById('pay-summary').innerHTML = `
+        <div class="pay-summary-card c1">
+            <div class="pay-sum-val" style="color:var(--amber)">${fmtPrice(totalBalance)}</div>
+            <div class="pay-sum-label">Outstanding Balance</div>
+        </div>
+        <div class="pay-summary-card c2">
+            <div class="pay-sum-val" style="color:#A78BFA">${fmtPrice(totalDeposits)}</div>
+            <div class="pay-sum-label">Deposits Collected</div>
+        </div>
+        <div class="pay-summary-card c3">
+            <div class="pay-sum-val" style="color:var(--green)">${fmtPrice(totalRevenue)}</div>
+            <div class="pay-sum-label">Revenue Realized</div>
+        </div>
+    `;
+}
+
+function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPayments();
+}
+
+function renderPayments() {
+    let list = allPayments;
+    if (currentFilter !== 'all') list = list.filter(p => p.payment_status === currentFilter);
+    const el = document.getElementById('payments-list');
+    if (!list.length) {
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">◇</div><b>No payments found</b><p>Record a payment from a booked session</p></div>`;
+        return;
+    }
+    el.innerHTML = list.map(p => `
+        <div class="payment-row">
+            <div>
+                <div style="font-weight:700;font-size:0.9rem">${p.client_name||'—'}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">${p.tattoo_idea||''}</div>
+            </div>
+            <div>
+                <div class="pay-cell-val" style="color:var(--amber)">${fmtPrice(p.deposit_amount)}</div>
+            </div>
+            <div>
+                <div class="pay-cell-val">${fmtPrice(p.total_amount)}</div>
+            </div>
+            <div>
+                <div class="pay-cell-val" style="color:${p.balance > 0 ? 'var(--neon-red)' : 'var(--green)'}">${fmtPrice(p.balance)}</div>
+            </div>
+            <div class="pay-actions">
+                <span class="badge ${getBadgeClass(p.payment_status)}">${p.payment_status.replace('_',' ')}</span>
+                <button class="btn-icon" onclick="openEditPay(${p.id})" title="Edit">✎</button>
+            </div>
+        </div>`).join('');
+}
+
+function openEditPay(id) {
+    currentPayId = id;
+    const p = allPayments.find(x => x.id === id);
+    document.getElementById('ep-client-name').textContent = p.client_name || '—';
+    document.getElementById('ep-tattoo').textContent = p.tattoo_idea || '';
+    document.getElementById('ep-deposit').value = p.deposit_amount || '';
+    document.getElementById('ep-total').value = p.total_amount || '';
+    updateBalancePreview();
+    openModal('editPayModal');
+}
+
+function updateBalancePreview() {
+    const dep = parseFloat(document.getElementById('ep-deposit').value) || 0;
+    const tot = parseFloat(document.getElementById('ep-total').value) || 0;
+    document.getElementById('ep-balance-preview').textContent = fmtPrice(Math.max(0, tot - dep));
+}
+document.getElementById('ep-deposit').addEventListener('input', updateBalancePreview);
+document.getElementById('ep-total').addEventListener('input', updateBalancePreview);
+
+async function savePayment() {
+    const deposit_amount = parseFloat(document.getElementById('ep-deposit').value) || 0;
+    const total_amount = parseFloat(document.getElementById('ep-total').value) || 0;
+    const r = await fetch('/api/payments/'+currentPayId, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({deposit_amount, total_amount})
+    });
+    if (r.ok) {
+        closeModal('editPayModal');
+        showToast('Payment updated');
+        loadPayments();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+async function openNewPayModal() {
+    const r = await fetch('/api/sessions');
+    if (!r.ok) return;
+    const sessions = await r.json();
+    const sel = document.getElementById('np-session');
+    sel.innerHTML = '<option value="">Select session…</option>';
+    sessions.filter(s => s.status === 'scheduled' || s.status === 'completed').forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.client_name} — ${fmtDate(s.session_date)}`;
+        sel.appendChild(opt);
+    });
+    openModal('newPayModal');
+}
+
+async function createPayment() {
+    const session_id = document.getElementById('np-session').value;
+    if (!session_id) { showToast('Select a session','error'); return; }
+    const r = await fetch('/api/payments', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+            session_id:parseInt(session_id),
+            deposit_amount:parseFloat(document.getElementById('np-deposit').value)||0,
+            total_amount:parseFloat(document.getElementById('np-total').value)||0
+        })
+    });
+    if (r.ok) {
+        closeModal('newPayModal');
+        showToast('Payment recorded!');
+        loadPayments();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+loadPayments();
+</script>
+{% endblock %}

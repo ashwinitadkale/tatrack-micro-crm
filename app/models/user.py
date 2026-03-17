@@ -4,11 +4,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
-
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     studio_name = db.Column(db.String(100))
+    inquiries = db.relationship("Inquiry", backref="artist", lazy=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

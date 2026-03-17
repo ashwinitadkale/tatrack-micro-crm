@@ -1,27 +1,175 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="max-w-md mx-auto bg-white p-8 border border-gray-200 rounded-lg shadow-sm mt-10">
-    <h2 class="text-2xl font-bold mb-6 text-center">Artist Login</h2>
-    <form id="loginForm" class="space-y-4">
-        <input type="email" id="loginEmail" placeholder="Email" class="w-full p-2 border rounded" required>
-        <input type="password" id="loginPassword" placeholder="Password" class="w-full p-2 border rounded" required>
-        <button type="submit" class="w-full bg-black text-white py-2 rounded font-bold hover:bg-gray-800">Login</button>
-    </form>
-    <p class="mt-4 text-center text-sm">Don't have an account? <a href="/register-page" class="text-blue-600 underline">Register</a></p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TATRACK — Sign In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #0B0B0B; --ink-deep: #050505; --ink-mid: #111111; --ink-surface: #181818; --ink-raised: #222222; --ink-border: #2a2a2a;
+            --neon-red: #FF3B3B; --neon-red-dim: rgba(255,59,59,0.15); --neon-red-glow: rgba(255,59,59,0.4);
+            --purple: #7C3AED; --purple-dim: rgba(124,58,237,0.15); --purple-glow: rgba(124,58,237,0.4);
+            --text-primary: #F5F5F5; --text-secondary: #888888; --text-muted: #555555;
+            --font-display: 'Bebas Neue', sans-serif; --font-body: 'Space Grotesk', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+            --radius: 8px; --radius-lg: 14px; --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--ink-deep);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            min-height: 100vh;
+            display: flex;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 20% 50%, rgba(124,58,237,0.12) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 50%, rgba(255,59,59,0.08) 0%, transparent 50%);
+        }
+        .auth-split { display: flex; width: 100%; min-height: 100vh; }
+        .auth-art {
+            flex: 1;
+            background: var(--ink-mid);
+            border-right: 1px solid var(--ink-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        .auth-art::before {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(ellipse 100% 60% at 50% 50%, rgba(124,58,237,0.15) 0%, transparent 70%);
+        }
+        .art-tagline {
+            position: relative;
+            font-family: var(--font-display);
+            font-size: 4.5rem;
+            line-height: 0.95;
+            letter-spacing: 4px;
+            text-align: center;
+            color: var(--text-primary);
+        }
+        .art-tagline .red { color: var(--neon-red); text-shadow: 0 0 40px var(--neon-red-glow); }
+        .art-sub {
+            position: relative;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 20px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
+        .art-features { position: relative; margin-top: 48px; display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 320px; }
+        .art-feature {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--ink-border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .art-feature-icon { color: var(--neon-red); font-size: 1rem; }
+        .auth-form-side {
+            width: 440px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px 50px;
+        }
+        .form-logo { font-family: var(--font-display); font-size: 2rem; letter-spacing: 4px; margin-bottom: 8px; }
+        .form-logo span { color: var(--neon-red); text-shadow: 0 0 20px var(--neon-red-glow); }
+        .form-welcome { font-size: 1.6rem; font-weight: 700; margin-bottom: 6px; }
+        .form-welcome-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 36px; }
+        .form-group { margin-bottom: 18px; }
+        .form-label { display: block; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-secondary); margin-bottom: 7px; font-family: var(--font-mono); }
+        .form-control {
+            width: 100%; background: var(--ink-raised); border: 1px solid var(--ink-border);
+            color: var(--text-primary); padding: 12px 16px; border-radius: var(--radius);
+            font-family: var(--font-body); font-size: 0.9rem; transition: var(--transition); outline: none;
+        }
+        .form-control::placeholder { color: var(--text-muted); }
+        .form-control:focus { border-color: var(--neon-red); box-shadow: 0 0 0 3px var(--neon-red-dim); }
+        .btn-auth {
+            width: 100%; padding: 13px; background: var(--neon-red); color: white;
+            border: none; border-radius: var(--radius); font-family: var(--font-body);
+            font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: var(--transition);
+            letter-spacing: 1px; margin-top: 8px;
+            box-shadow: 0 0 20px var(--neon-red-dim);
+        }
+        .btn-auth:hover { background: #ff5252; box-shadow: 0 0 30px var(--neon-red-glow); transform: translateY(-1px); }
+        .btn-auth:active { transform: none; }
+        .btn-auth:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .form-switch { text-align: center; margin-top: 24px; font-size: 0.85rem; color: var(--text-muted); }
+        .form-switch a { color: var(--neon-red); text-decoration: none; font-weight: 600; }
+        .form-switch a:hover { text-decoration: underline; }
+        .form-error { background: var(--neon-red-dim); border: 1px solid rgba(255,59,59,0.3); color: var(--neon-red); padding: 10px 14px; border-radius: var(--radius); font-size: 0.85rem; margin-bottom: 16px; display: none; }
+        @media (max-width: 900px) {
+            .auth-art { display: none; }
+            .auth-form-side { width: 100%; padding: 40px 30px; }
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--ink-mid); }
+        ::-webkit-scrollbar-thumb { background: var(--ink-border); border-radius: 3px; }
+    </style>
+</head>
+<body>
+<div class="auth-split">
+    <div class="auth-art">
+        <div class="art-tagline">NEVER<br>LOSE A<br><span class="red">CLIENT</span><br>AGAIN</div>
+        <div class="art-sub">Tattoo Artist Workflow System</div>
+        <div class="art-features">
+            <div class="art-feature"><span class="art-feature-icon">✦</span> Centralized inquiry tracking</div>
+            <div class="art-feature"><span class="art-feature-icon">◉</span> Automated follow-up reminders</div>
+            <div class="art-feature"><span class="art-feature-icon">◇</span> Deposit & payment management</div>
+            <div class="art-feature"><span class="art-feature-icon">◈</span> Session booking pipeline</div>
+        </div>
+    </div>
+    <div class="auth-form-side">
+        <div class="form-logo">TAT<span>RACK</span></div>
+        <div class="form-welcome">Welcome back</div>
+        <div class="form-welcome-sub">Sign in to your artist dashboard</div>
+
+        <div class="form-error" id="loginError"></div>
+
+        <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="loginEmail" placeholder="artist@studio.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn-auth" id="loginBtn" onclick="doLogin()">SIGN IN</button>
+
+        <div class="form-switch">
+            New artist? <a href="/register">Create your account →</a>
+        </div>
+    </div>
 </div>
 <script>
-document.getElementById('loginForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const res = await fetch('/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            email: document.getElementById('loginEmail').value,
-            password: document.getElementById('loginPassword').value
-        })
-    });
-    if (res.ok) window.location.href = '/dashboard';
-    else alert("Invalid credentials");
-};
+    document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+    async function doLogin() {
+        const btn = document.getElementById('loginBtn');
+        const err = document.getElementById('loginError');
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        err.style.display = 'none';
+        if (!email || !password) { err.textContent = 'Please enter email and password.'; err.style.display = 'block'; return; }
+        btn.disabled = true; btn.textContent = 'SIGNING IN…';
+        try {
+            const r = await fetch('/api/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({email, password}) });
+            const d = await r.json();
+            if (r.ok) { window.location.href = '/dashboard'; }
+            else { err.textContent = d.error || 'Login failed'; err.style.display = 'block'; btn.disabled = false; btn.textContent = 'SIGN IN'; }
+        } catch(e) { err.textContent = 'Network error'; err.style.display = 'block'; btn.disabled = false; btn.textContent = 'SIGN IN'; }
+    }
 </script>
-{% endblock %}
+</body>
+</html>

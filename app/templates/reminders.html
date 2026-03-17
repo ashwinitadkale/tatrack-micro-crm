@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Reminders{% endblock %}
+{% block extra_styles %}
+<style>
+.reminder-filters { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+.filter-btn { padding:6px 16px; border-radius:99px; font-size:0.75rem; font-weight:600; cursor:pointer; border:1px solid var(--ink-border); background:var(--ink-raised); color:var(--text-muted); transition:var(--transition); font-family:var(--font-mono); text-transform:uppercase; letter-spacing:1px; }
+.filter-btn:hover { color:var(--text-primary); border-color:#444; }
+.filter-btn.active { background:var(--neon-red-dim); color:var(--neon-red); border-color:rgba(255,59,59,0.4); }
+.reminder-card {
+    background:var(--ink-surface);
+    border:1px solid var(--ink-border);
+    border-radius:var(--radius);
+    padding:16px 20px;
+    display:flex; align-items:center; gap:16px;
+    transition:var(--transition);
+    margin-bottom:8px;
+}
+.reminder-card:hover { border-color:#333; }
+.reminder-card.overdue { border-left:3px solid var(--neon-red); background:rgba(255,59,59,0.03); }
+.reminder-card.today { border-left:3px solid var(--purple); background:var(--purple-dim); }
+.reminder-card.done { opacity:0.4; }
+.rem-check { width:20px; height:20px; border-radius:50%; border:2px solid var(--ink-border); background:transparent; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:var(--transition); }
+.rem-check:hover { border-color:var(--green); }
+.rem-check.checked { background:var(--green); border-color:var(--green); color:white; font-size:0.7rem; }
+.rem-body { flex:1; min-width:0; }
+.rem-client { font-weight:700; font-size:0.9rem; }
+.rem-note { font-size:0.8rem; color:var(--text-muted); margin-top:2px; }
+.rem-meta { display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+.rem-right { text-align:right; flex-shrink:0; }
+.rem-date { font-family:var(--font-mono); font-size:0.75rem; color:var(--text-secondary); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-enter">
+<div class="page-header">
+    <div>
+        <div class="page-title">REMINDERS</div>
+        <div class="page-subtitle">Follow-up schedule</div>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addRemModal')">+ Add Reminder</button>
+</div>
+<div class="page-body">
+    <div class="reminder-filters">
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('overdue',this)">Overdue</button>
+        <button class="filter-btn" onclick="setFilter('today',this)">Today</button>
+        <button class="filter-btn" onclick="setFilter('upcoming',this)">Upcoming</button>
+        <button class="filter-btn" onclick="setFilter('done',this)">Completed</button>
+    </div>
+
+    <div id="reminders-list">
+        <div class="skeleton" style="height:72px;margin-bottom:8px;border-radius:8px"></div>
+        <div class="skeleton" style="height:72px;margin-bottom:8px;border-radius:8px"></div>
+        <div class="skeleton" style="height:72px;border-radius:8px"></div>
+    </div>
+</div>
+</div>
+
+<!-- Add Reminder Modal -->
+<div class="modal-overlay" id="addRemModal">
+<div class="modal">
+    <div class="modal-header">
+        <span class="modal-title">NEW REMINDER</span>
+        <button class="modal-close" onclick="closeModal('addRemModal')">×</button>
+    </div>
+    <div class="modal-body">
+        <div class="form-group">
+            <label class="form-label">Client / Inquiry *</label>
+            <select class="form-control" id="ar-inquiry">
+                <option value="">Select a client…</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Reminder Date *</label>
+            <input class="form-control" id="ar-date" type="date">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Note</label>
+            <input class="form-control" id="ar-note" placeholder="What to follow up about…">
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('addRemModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="addReminder()">Set Reminder</button>
+    </div>
+</div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+let allReminders = [];
+let currentFilter = 'all';
+
+async function loadReminders() {
+    const r = await fetch('/api/reminders');
+    if (!r.ok) { window.location.href='/login'; return; }
+    allReminders = await r.json();
+    renderReminders();
+}
+
+function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderReminders();
+}
+
+function renderReminders() {
+    const today = new Date().toISOString().split('T')[0];
+    let list = allReminders;
+    if (currentFilter === 'overdue') list = list.filter(r => r.is_overdue);
+    else if (currentFilter === 'today') list = list.filter(r => r.is_today && !r.is_completed);
+    else if (currentFilter === 'upcoming') list = list.filter(r => !r.is_overdue && !r.is_today && !r.is_completed);
+    else if (currentFilter === 'done') list = list.filter(r => r.is_completed);
+
+    const el = document.getElementById('reminders-list');
+    if (!list.length) {
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">◉</div><b>No reminders here</b><p>Add reminders to keep on top of your clients</p></div>`;
+        return;
+    }
+
+    el.innerHTML = list.map(r => {
+        let cls = '';
+        let tag = '';
+        if (r.is_completed) { cls='done'; tag=`<span class="badge" style="background:var(--green-dim);color:var(--green)">Done</span>`; }
+        else if (r.is_overdue) { cls='overdue'; tag=`<span class="badge badge-overdue">Overdue</span>`; }
+        else if (r.is_today) { cls='today'; tag=`<span class="badge badge-today">Today</span>`; }
+        return `
+        <div class="reminder-card ${cls}" id="rem-card-${r.id}">
+            <div class="rem-check ${r.is_completed?'checked':''}" onclick="toggleDone(${r.id}, ${r.is_completed}, this)">
+                ${r.is_completed ? '✓' : ''}
+            </div>
+            <div class="rem-body">
+                <div class="rem-client">${r.client_name||'—'}</div>
+                <div class="rem-note">${r.note||'Follow up'}</div>
+                <div class="rem-meta">
+                    ${tag}
+                    ${r.tattoo_idea ? `<span style="font-size:0.72rem;color:var(--text-muted)">· ${r.tattoo_idea}</span>` : ''}
+                </div>
+            </div>
+            <div class="rem-right">
+                <div class="rem-date">${fmtDate(r.reminder_date)}</div>
+                ${!r.is_completed ? `<button class="btn btn-ghost btn-sm" style="margin-top:8px;font-size:0.7rem;padding:3px 8px;" onclick="deleteReminder(${r.id})">✕</button>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function toggleDone(id, isDone, el) {
+    if (isDone) return;
+    await fetch('/api/reminders/'+id+'/complete', {method:'PUT'});
+    el.classList.add('checked');
+    el.textContent = '✓';
+    document.getElementById('rem-card-'+id).classList.add('done');
+    showToast('Reminder completed ✓');
+    loadReminderBadge();
+    setTimeout(loadReminders, 600);
+}
+
+async function deleteReminder(id) {
+    await fetch('/api/reminders/'+id, {method:'DELETE'});
+    showToast('Reminder deleted','warning');
+    loadReminders();
+}
+
+async function loadInquiriesForSelect() {
+    const r = await fetch('/api/inquiries');
+    if (!r.ok) return;
+    const inquiries = await r.json();
+    const sel = document.getElementById('ar-inquiry');
+    inquiries.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = `${i.client_name} (${i.status})`;
+        sel.appendChild(opt);
+    });
+}
+
+async function addReminder() {
+    const inquiry_id = document.getElementById('ar-inquiry').value;
+    const date = document.getElementById('ar-date').value;
+    if (!inquiry_id || !date) { showToast('Client and date required','error'); return; }
+    const r = await fetch('/api/reminders', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({inquiry_id:parseInt(inquiry_id), reminder_date:date, note:document.getElementById('ar-note').value})
+    });
+    if (r.ok) {
+        closeModal('addRemModal');
+        document.getElementById('ar-inquiry').selectedIndex=0;
+        document.getElementById('ar-date').value='';
+        document.getElementById('ar-note').value='';
+        showToast('Reminder created!');
+        loadReminders();
+        loadReminderBadge();
+    } else {
+        const d = await r.json(); showToast(d.error||'Error','error');
+    }
+}
+
+document.getElementById('ar-date').min = new Date().toISOString().split('T')[0];
+loadReminders();
+loadInquiriesForSelect();
+</script>
+{% endblock %}
